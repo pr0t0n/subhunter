@@ -15,6 +15,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+<<<<<<< HEAD
 # SubHunter
 
 SubHunter é uma ferramenta simples em Python para automação básica de descoberta
@@ -87,3 +88,19 @@ Contribuições
 
 Licença & Aviso
 - Forneça/adicione aqui a licença desejada e use a ferramenta com responsabilidade.
+=======
+Uso:
+
+```bash
+python subhunter.py --domain example.com --wordlist subdomains.txt --output results.csv
+```
+
+Os resultados estarão em `results.csv`.
+
+Observações:
+
+- O scanner usa resolução DNS e tentativas de conexão TCP (não é exaustivo).
+- Ajuste a `subdomains.txt` para melhorar a enumeração.
+- Use com permissão do dono dos domínios alvo.
+# subhunter
+>>>>>>> e1b840bd24e572599d2b7437bf6eab3f660692fb
