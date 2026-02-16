@@ -1,0 +1,11 @@
+Cloudflare:cloudflare,cf-ray,cf-cache-status
+Akamai:akamai,akamaig
+Imperva Incapsula:incapsula,visid_incap,incap_ses_
+Sucuri:sucuri,siteprotect
+F5 / BIG-IP:bigip,f5
+ModSecurity:mod_security,mod_security
+AWS WAF:aws,waf,amazon
+Distil:distil
+Fastly:fastly
+CloudFront:cloudfront
+Generic WAF:access denied,request blocked,forbidden

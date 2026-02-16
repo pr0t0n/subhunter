@@ -1,0 +1,39 @@
+WordPress:wordpress,wp-,xmlrpc.php,wp-login.php,wp-content
+Joomla:joomla,administrator/,index.php?option=com_
+Drupal:drupal,drupal,sites/all/modules
+Shopify:shopify,cdn.shopify.com,myshopify
+Magento:magento,skin/frontend,checkout/cart
+ASP.NET / IIS:asp.net,microsoft-iis,asp.net
+nginx:nginx,ngx_http
+Apache:apache,httpd,mod_php
+Python WSGI:gunicorn,uwsgi,mod_wsgi
+Node/Express:express,node powered
+Laravel:laravel,artisan
+Django:django,csrfmiddlewaretoken,runserver
+Flask:flask,werkzeug
+Tomcat:tomcat,jsp,servlet
+Jetty:jetty
+WebLogic:weblogic,bea_wls
+WebSphere:websphere,WebSphere
+OracleAPEX:apex,ords
+IIS-Exchange:owa,Microsoft-HTTPAPI
+cPanel:cPanel,whm,cpanel
+Plesk:plesk,panel.ini
+GitLab:gitlab,gitlab-rails
+GitHub Pages:github.io,jekyll
+Atlassian-Jira:jira,atlassian
+Atlassian-Confluence:confluence,atlassian
+Squarespace:squarespace
+Wix:wix,static.wix
+Varnish:varnish
+Fastly:fastly
+CloudFront:cloudfront
+Netlify:netlify
+Heroku:herokuapp
+Firebase:firebaseapp
+OpenResty:openresty
+Sucuri:sucuri,siteprotect
+Imperva:incapsula,visid_incap
+Distil:distil
+F5:bigip,f5
+ModSecurity:mod_security,mod_security

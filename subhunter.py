@@ -8,11 +8,52 @@ import argparse
 import csv
 import socket
 import concurrent.futures
+import os
+import time
+from pathlib import Path
 import requests
 from requests.exceptions import RequestException
 import sys
 
-COMMON_PORTS = [21,22,23,25,53,80,110,143,443,445,465,587,636,993,995,1433,1521,3306,3389,5900,8080]
+
+PORTS_FILE = Path(__file__).parent / 'ports.txt'
+APPS_FILE = Path(__file__).parent / 'apps_signatures.txt'
+WAF_FILE = Path(__file__).parent / 'waf_signatures.txt'
+
+
+def load_ports_file(path: Path) -> list:
+    """Load ports from a file, one port per line. Returns sorted unique ints.
+
+    Raises FileNotFoundError if file missing.
+    """
+    ports = []
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            s = line.strip()
+            if not s or s.startswith('#'):
+                continue
+            try:
+                ports.append(int(s))
+            except ValueError:
+                continue
+    return sorted(set(ports))
+
+def load_signatures(path: Path) -> list:
+    """Load signature files like apps or wafs. Format: Name:pattern1,pattern2"""
+    sigs = []
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if ':' in line:
+                    name, pats = line.split(':', 1)
+                    patterns = [p.strip().lower() for p in pats.split(',') if p.strip()]
+                    sigs.append((name.strip(), patterns))
+    except FileNotFoundError:
+        return []
+    return sigs
 
 def resolve_host(host):
     try:
@@ -55,7 +96,6 @@ def probe_http(host, ip):
     for scheme in schemes:
         url = scheme + host
         try:
-            import time
             start = time.monotonic()
             r = requests.get(url, timeout=5, allow_redirects=True, headers={'User-Agent': 'Mozilla/5.0'})
             elapsed = time.monotonic() - start
@@ -106,37 +146,25 @@ def probe_waf(probe):
         return 'Generic WAF / Firewall'
 
     return None
+    return None
 
-def guess_application(probe):
-    hints = []
+
+def detect_signatures(probe, signatures):
+    """Return semicolon-joined names from signatures that match the probe data."""
+    if not signatures:
+        return None
     body = (probe.get('body_snippet') or '').lower()
     server = (probe.get('server') or '').lower()
     xpb = (probe.get('x_powered_by') or '').lower()
     title = (probe.get('title') or '').lower()
-
-    if 'wordpress' in body or 'wp-' in body or 'xmlrpc.php' in body:
-        hints.append('WordPress')
-    if 'joomla' in body or 'administrator/' in body:
-        hints.append('Joomla')
-    if 'drupal' in body:
-        hints.append('Drupal')
-    if 'shopify' in body or 'cdn.shopify.com' in body:
-        hints.append('Shopify')
-    if 'magento' in body:
-        hints.append('Magento')
-    if 'asp.net' in xpb or 'microsoft-iis' in server:
-        hints.append('ASP.NET / IIS')
-    if 'nginx' in server:
-        hints.append('nginx')
-    if 'apache' in server:
-        hints.append('Apache')
-    if 'gunicorn' in server or 'uwsgi' in server:
-        hints.append('Python WSGI')
-    if not hints and title:
-        if 'express' in title:
-            hints.append('Node/Express')
-
-    return ';'.join(hints) if hints else None
+    matches = []
+    for name, patterns in signatures:
+        for p in patterns:
+            if p in body or p in server or p in xpb or p in title:
+                matches.append(name)
+                break
+    matches = list(dict.fromkeys(matches))
+    return ';'.join(matches) if matches else None
 
 def enumerate_subdomains(domain, prefixes, threads=20):
     found = []
@@ -155,9 +183,22 @@ def enumerate_subdomains(domain, prefixes, threads=20):
                 found.append(res)
     return sorted(found, key=lambda x: x[0])
 
-def scan_host(host, ips, ports=COMMON_PORTS):
+def scan_host(host, ips, ports, app_signatures, waf_signatures, verbose):
+    """Scan a single host: ports scan, HTTP probe, app guess and WAF detection.
+
+    Args:
+        host (str): hostname (subdomain.domain)
+        ips (list): list of resolved IPs for host
+        ports (list): list of integer ports to check
+        signatures (list): app signature tuples (name, patterns)
+        verbose (int): verbosity level (0,1,2)
+    Returns:
+        dict: scan result suitable for CSV writing
+    """
     ip = ips[0]
-    print(f"Scanning {host} -> {ip} ...", flush=True)
+    if verbose >= 1:
+        print(f"Scanning {host} -> {ip} ...", flush=True)
+
     open_ports = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=50) as ex:
         futures = {ex.submit(scan_port, ip, p): p for p in ports}
@@ -170,11 +211,22 @@ def scan_host(host, ips, ports=COMMON_PORTS):
                 pass
 
     probe = probe_http(host, ip)
-    app = guess_application(probe)
-    waf = probe_waf(probe)
-    # concise result line
-    ports_str = ','.join(str(p) for p in sorted(open_ports)) if open_ports else 'none'
-    print(f"Result {host}: ip={ip} ports={ports_str} status={probe.get('status')} waf={waf}", flush=True)
+    app = detect_signatures(probe, app_signatures)
+    waf = detect_signatures(probe, waf_signatures)
+
+    if verbose >= 2:
+        if open_ports:
+            for p in sorted(open_ports):
+                print(f"Open port {p} on {host}", flush=True)
+        else:
+            print(f"No open common ports on {host}", flush=True)
+        if app:
+            print(f"App guess for {host}: {app}", flush=True)
+
+    if verbose >= 1:
+        ports_str = ','.join(str(p) for p in sorted(open_ports)) if open_ports else 'none'
+        print(f"Result {host}: ip={ip} ports={ports_str} status={probe.get('status')} waf={waf}", flush=True)
+
     return {
         'host': host,
         'ip': ip,
@@ -196,6 +248,7 @@ def main():
     parser.add_argument('--wordlist', '-w', default='subdomains.txt', help='Subdomains wordlist')
     parser.add_argument('--output', '-o', default='results.csv', help='Output CSV file')
     parser.add_argument('--threads', '-t', type=int, default=50, help='Threads for enumeration')
+    parser.add_argument('--verbose', '-v', type=int, choices=[0,1,2], default=1, help='Verbosity level: 0=quiet, 1=summary, 2=debug')
     args = parser.parse_args()
 
     try:
@@ -205,6 +258,24 @@ def main():
     except FileNotFoundError:
         print('Wordlist not found:', args.wordlist, file=sys.stderr)
         sys.exit(1)
+
+    # load ports and application signatures from files (can be expanded later)
+    ports_file = os.path.join(os.path.dirname(__file__), 'ports.txt') if not hasattr(args, 'ports_file') else args.ports_file
+    apps_file = os.path.join(os.path.dirname(__file__), 'apps_signatures.txt') if not hasattr(args, 'apps_file') else args.apps_file
+
+    try:
+        ports_list = load_ports_file(Path(ports_file))
+    except FileNotFoundError:
+        print('Ports file not found:', ports_file, file=sys.stderr)
+        sys.exit(1)
+
+    if not ports_list:
+        print('No ports loaded from', ports_file, file=sys.stderr)
+        sys.exit(1)
+
+    signatures = load_signatures(Path(apps_file))
+    waf_signatures = load_signatures(Path(WAF_FILE))
+    verbose = int(args.verbose)
 
     domains = []
     if args.list:
@@ -225,7 +296,7 @@ def main():
 
         results = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-            futures = [ex.submit(scan_host, host, ips) for host, ips in subs]
+            futures = [ex.submit(scan_host, host, ips, ports_list, signatures, waf_signatures, verbose) for host, ips in subs]
             for f in concurrent.futures.as_completed(futures):
                 try:
                     results.append(f.result())
