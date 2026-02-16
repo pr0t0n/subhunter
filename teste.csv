@@ -1,0 +1,4 @@
+host,ip,open_ports,http_url,http_status,server,x_powered_by,title,app_guess,waf
+sso.valid.com,34.95.163.67,443,https://sso.valid.com/,404,nginx/1.28.0,,,nginx,
+edu.valid.com,144.22.137.90,80;443,https://edu.valid.com/auth/signin,200,,,,,
+email.valid.com,34.102.239.211,80;443,https://email.valid.com/,404,,,,,
