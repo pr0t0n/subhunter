@@ -1,0 +1,12 @@
+www
+mail
+ftp
+api
+dev
+test
+admin
+staging
+smtp
+webmail
+ns1
+ns2
